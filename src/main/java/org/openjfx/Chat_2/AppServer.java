@@ -94,11 +94,6 @@ public class AppServer extends Application implements Runnable{
 	  
 	  /*
 	   * Запуск сервера
-	   * 
-	   * Пересмотреть еще раз закрытие сервера, он помоему не закрыввает ВСЕ сокеты. Или закрывает НО после того как снвоа добавить клиента,
-	   * сейчас он скорее закрывает прием новых клиентов.
-	   * 
-	   * 
 	   */
 	  btn1.setOnAction(e -> {
 		  AppServer appServer = new AppServer();
@@ -111,14 +106,8 @@ public class AppServer extends Application implements Runnable{
 
 		  
 	  });
-	  
+	  //Нажатие на эту кнопку останавливает сервер
 	  btn3.setOnAction(e -> {
-		  /*
-		   * Создать клиента который будет создаваться при нажатии на кнопку,
-		   * для того что бы он подключился к серверу и сбил метод accept()
-		   * после чего сервер сможет уже остановиться.
-		   * 
-		   */
 		  tAppServer.interrupt();
 		  ClientManagement clientManagement = new ClientManagement(true);
 		  Thread t = new Thread(clientManagement);
@@ -206,11 +195,10 @@ public class AppServer extends Application implements Runnable{
 		@Override
 		public void run() {
 			String request;
-			while (true) {//Проверяет на прерывание потока сервера
+			while (true) {
 				try {
-
 					request = reader.readLine();
-					
+					//Если приходящее сообщение это "Вихід" и "Exit", тогда сервер отправляет сообщение обратно и вычеркивая клиента из списка, закрывает соединение
 					if (request.equals("Вихід") || request.equals("Exit")) {
 						send(request);
 						textArea.appendText("Закрываемо діалог з клієнтом\n");
@@ -220,7 +208,11 @@ public class AppServer extends Application implements Runnable{
 						stopServer();
 						break;
 					}
-					sendToAll(request);//Отправляет сообщение всем пользователям
+					/*
+					 * Если приходящее сообщение не то что выше, тогда сервер отправляет всем пользователям сообщение, 
+					 * вместе с именем которое автоматически даеться при написании сообщения в ClientManagement
+					 */
+					sendToAll(request);
 					
 				} catch (IOException e) {
 					stopServer();

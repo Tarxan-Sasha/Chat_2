@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
+import java.time.LocalTime;
 
 import javafx.application.Application;
 import javafx.geometry.Insets;
@@ -22,14 +23,16 @@ public class ClientManagement extends Application implements Runnable{
 	private static Socket clientSocket;
 	private static BufferedReader reader;
 	private static BufferedWriter writer;
-	private String name;
+	private static String name;
 	private static TextArea textAreaOutput;
 	private static TextField textFieldInput;
 	private static Button btn1;
 	private boolean isShadowClient;
 	
 	public ClientManagement() {
-		
+	}
+	public ClientManagement(String name) {
+		this.name = name;
 	}
 	public ClientManagement(boolean shadowClient) {
 		this.isShadowClient = shadowClient;
@@ -45,6 +48,7 @@ public class ClientManagement extends Application implements Runnable{
 	}
 	@Override
 	public void start(Stage primaryStage) throws Exception {
+		
 		textAreaOutput = new TextArea();
 		textAreaOutput.setMaxWidth(300);
 		textAreaOutput.setMaxHeight(300);
@@ -57,11 +61,6 @@ public class ClientManagement extends Application implements Runnable{
 		textFieldInput = new TextField();
 		textFieldInput.setPrefWidth(215);
 		btn1 = new Button("Отправить");
-		btn1.setOnAction(e ->{
-			String m = textFieldInput.getText();
-			textAreaOutput.appendText(m+"\n");//Отправляет сиообщение на поле вывода
-			textFieldInput.deleteText(0, m.length());//Удаляет сообщение из поля ввода, с 0 элемента по максимальный
-		});
 		
 		FlowPane fpInputFields = new FlowPane(Orientation.HORIZONTAL,10,0,textFieldInput, btn1);//Второй Блок с кнопкой и поелм для ввода
 		FlowPane.setMargin(fpInputFields, new Insets(5, 0, 0, 20));
@@ -120,14 +119,16 @@ public class ClientManagement extends Application implements Runnable{
 		}
 	}
 	// Метод отправляет сообщение на сервер
-	private  void writeToServer(String message) {
+	private void writeToServer(String message) {
 		try {
+			//Если сообщение это "Вихід" или "Exit" тогда отправляет только это сообщение, нечего лишнего не отправляет
 			if (message.equals("Вихід") || message.equals("Exit")) {
 
 				System.out.println("Ви вийшли");
 				writer.write(message+"\n");
 				writer.flush();
-
+				
+			//Если сообщение не соответсвует тому сверху, тогда к обычному сообщению добавляетсья еще и имя ионо спокойно отправляеться
 			} else {
 				writer.write(name + ": " + message + "\n");
 				writer.flush();
@@ -138,7 +139,7 @@ public class ClientManagement extends Application implements Runnable{
 			e1.printStackTrace();
 		}
 	}
-	
+
 	// внутрішній клас для читання за серверу(з чату)
 	private class ReadMsg extends Thread {
 		private String msg;
@@ -150,7 +151,8 @@ public class ClientManagement extends Application implements Runnable{
 			while (true) {
 				try {
 					msg = reader.readLine();
-					lastMsg = lastMsg + "\n" + msg;
+					LocalTime localTime = LocalTime.now();//Получаем текущее время час минута и секунда
+					lastMsg = lastMsg + "\n"+msg+"   "+localTime.getHour()+":"+localTime.getMinute();//собираем все в кучу
 					textAreaOutput.setText(lastMsg);
 					// System.out.println(msg); //отображение на консоле
 					if (msg.equals("Вихід") || msg.equals("Exit")) {
@@ -170,16 +172,17 @@ public class ClientManagement extends Application implements Runnable{
 
 	// Внутрішній клас для запису на сервер(у чат)
 	private class WriteMsg extends Thread {
-		private String words;
+		private String words;//Слова которые пишутсья клиентом и отправляються
 		@Override
 		public void run() throws NullPointerException {
 			while (true) {
-				btn1.setOnAction( e -> {
+				btn1.setOnAction( e -> {//Действие кнопки "Отправить"
 					if(isShadowClient==true) {
 						System.out.println("ShadowClient");
 						words="Exit";
 					}else {
 						words = textFieldInput.getText();// получение с поля во фрейме
+						textFieldInput.deleteText(0, words.length());
 					}
 					writeToServer(words);
 				});
