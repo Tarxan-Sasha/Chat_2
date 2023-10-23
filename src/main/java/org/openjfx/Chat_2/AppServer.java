@@ -7,6 +7,9 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -34,7 +37,7 @@ public class AppServer extends Application implements Runnable{
 	private static Socket clientSocket;
 	public static List<ServerManagment> listOfClients = new ArrayList<ServerManagment>();
 	private static TextArea textArea;
-
+	private static Connection connection;
 	private static Thread fxThread;//Поток который будет отвечать за визуал 
 	private static Thread tAppServer;//Поток который будет отвечать за сервер
 	public static volatile int count = 0;
@@ -99,6 +102,13 @@ public class AppServer extends Application implements Runnable{
 		  AppServer appServer = new AppServer();
 		  tAppServer = new Thread(appServer);
 		  tAppServer.start();
+		  try{
+			  connection = DriverManager.getConnection("jdbc:mysql://localhost/clients_chat2","root","root");
+			  DataBaseManagement dataBaseManagement = new DataBaseManagement(connection);
+			  textArea.appendText("Система хранения данных: База данных \n");
+		  }catch( SQLException exc){
+			  textArea.appendText("Система хранения данных: Список \n");
+		  }
 		  
 	  });
 	  

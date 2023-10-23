@@ -140,6 +140,10 @@ public class ClientManagement extends Application implements Runnable{
 		}
 	}
 
+	public String getName() {
+		return name;
+	}
+	
 	// внутрішній клас для читання за серверу(з чату)
 	private class ReadMsg extends Thread {
 		private String msg;
