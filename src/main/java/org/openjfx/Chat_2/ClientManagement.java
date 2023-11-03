@@ -6,6 +6,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
+import java.sql.SQLException;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 
 import javafx.application.Application;
@@ -27,7 +29,11 @@ public class ClientManagement extends Application implements Runnable{
 	private static TextArea textAreaOutput;
 	private static TextField textFieldInput;
 	private static Button btn1;
-	private boolean isShadowClient;
+	private static boolean isShadowClient;//Теневой ли клиент
+	private static boolean isExit;//Вышел ли клиент
+	//Переменные для работы с БД
+	private static DataBaseManagement dataBaseManagement;
+	private static LocalTime localTime;
 	
 	public ClientManagement() {
 	}
@@ -79,7 +85,9 @@ public class ClientManagement extends Application implements Runnable{
 		primaryStage.show();
 		
 		primaryStage.setOnCloseRequest(e ->{//Что произойдет если нажать на крестик
-			writeToServer("Exit");
+			if(isExit == false) {
+				writeToServer("Exit");
+			}
 			stopClient();
 		});
 		
@@ -91,17 +99,25 @@ public class ClientManagement extends Application implements Runnable{
 		try {
 			clientSocket = new Socket("localhost", 8000);
 			System.out.println(name + ", впишіть будь яке речення чи слово");
-
-			reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-			writer = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
-
-			WriteMsg wm = new WriteMsg();
-			wm.start();// Запуск процесса записи
-			ReadMsg rm = new ReadMsg();
-			rm.start();// Запуск процесса чтения
-
-
-		} catch (IOException e) {
+			if(isShadowClient==true) {//Проверяет являеться ли клиент теневым, если ДА сразу вырубает соединение не создавая нечего лишнего
+				clientSocket.close();
+			}else {
+				//Проверяет есть ли соединение и теневой ли клиент, если подключение есть и клиент НЕ теневой, тогда он добавляеться в БД
+				if(ConnectionToDataBase.CONNECT.isConnectToDataBase()) {
+					dataBaseManagement = new DataBaseManagement();
+					dataBaseManagement.addClient(this);//Добавление клиента в БД
+					dataBaseManagement.stopConnect();//остановвка соединения с БД
+				}
+				
+				reader = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
+				writer = new BufferedWriter(new OutputStreamWriter(clientSocket.getOutputStream()));
+	
+				WriteMsg wm = new WriteMsg();
+				wm.start();// Запуск процесса записи
+				ReadMsg rm = new ReadMsg();
+				rm.start();// Запуск процесса чтения
+			}
+		} catch (IOException | SQLException e) {
 			stopClient();
 			e.printStackTrace();
 		}
@@ -118,16 +134,13 @@ public class ClientManagement extends Application implements Runnable{
 			e.printStackTrace();
 		}
 	}
-	// Метод отправляет сообщение на сервер
+	// Метод отправляет сообщение
 	private void writeToServer(String message) {
 		try {
 			//Если сообщение это "Вихід" или "Exit" тогда отправляет только это сообщение, нечего лишнего не отправляет
 			if (message.equals("Вихід") || message.equals("Exit")) {
-
-				System.out.println("Ви вийшли");
 				writer.write(message+"\n");
 				writer.flush();
-				
 			//Если сообщение не соответсвует тому сверху, тогда к обычному сообщению добавляетсья еще и имя ионо спокойно отправляеться
 			} else {
 				writer.write(name + ": " + message + "\n");
@@ -143,6 +156,11 @@ public class ClientManagement extends Application implements Runnable{
 	public String getName() {
 		return name;
 	}
+	//Метод предает локальное время час:минута:секунда для БД
+	public String getLocalDateTime() {
+		LocalDateTime localDateTime = LocalDateTime.now();
+		return localDateTime.getYear()+"-"+localDateTime.getMonthValue()+"-"+localDateTime.getDayOfMonth()+" "+localDateTime.getHour()+":"+localDateTime.getMinute()+":"+localDateTime.getSecond();
+	}
 	
 	// внутрішній клас для читання за серверу(з чату)
 	private class ReadMsg extends Thread {
@@ -155,12 +173,15 @@ public class ClientManagement extends Application implements Runnable{
 			while (true) {
 				try {
 					msg = reader.readLine();
-					LocalTime localTime = LocalTime.now();//Получаем текущее время час минута и секунда
+					localTime = LocalTime.now();//Получаем текущее время час минута и секунда
 					lastMsg = lastMsg + "\n"+msg+"   "+localTime.getHour()+":"+localTime.getMinute();//собираем все в кучу
 					textAreaOutput.setText(lastMsg);
 					// System.out.println(msg); //отображение на консоле
-					if (msg.equals("Вихід") || msg.equals("Exit")) {
-
+					if (msg.equals("Сервер закончил работу")) {//Получает от сервера "Exit", это сообщение должно отличатсья от "Вы вышли", для того что бы сработал код снизу и клиент отправил "Exit" обратно.
+						writeToServer("Exit");//Отправляю обратно для того что бы в случае если сервер закрылся и посылает Exit, клиент его возвращает и срабатывает закрытие.
+						break;
+					}
+					if(msg.equals("Вы вышли")) {//Это уже то что сервер посылает окончательно после выхода из сервера
 						break;
 					}
 				} catch (IOException e) {
@@ -174,33 +195,28 @@ public class ClientManagement extends Application implements Runnable{
 
 	}
 
-	// Внутрішній клас для запису на сервер(у чат)
+	// Внутренний класс который записывает сообщение на сервер
 	private class WriteMsg extends Thread {
-		private String words;//Слова которые пишутсья клиентом и отправляються
+		private String words;//Слова которые пишутся клиентом и отправляються
 		@Override
 		public void run() throws NullPointerException {
+			
 			while (true) {
-				btn1.setOnAction( e -> {//Действие кнопки "Отправить"
-					if(isShadowClient==true) {
-						System.out.println("ShadowClient");
-						words="Exit";
-					}else {
-						words = textFieldInput.getText();// получение с поля во фрейме
-						textFieldInput.deleteText(0, words.length());
-					}
+				btn1.setOnAction( e -> {//Действие кнопки "Отправить"					
+					words = textFieldInput.getText();// получение с поля во фрейме
+					textFieldInput.deleteText(0, words.length());
 					writeToServer(words);
-				});
-				
-				if (words.equals("Вихід") || words.equals("Exit")) {
-					System.out.println(1);
-					stopClient();
-					break;
-				}
 
+				});
+				if ((words.equals("Вихід") || words.equals("Exit"))) {
+						System.out.println(12);
+						stopClient();
+						break;
+				}
 			}
 
 		}
-
+		
 	}
 
 }

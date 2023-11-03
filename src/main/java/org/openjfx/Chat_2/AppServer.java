@@ -7,8 +7,6 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,11 +22,8 @@ import javafx.scene.control.TextArea;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.paint.Color;
 import javafx.stage.Stage;
-/**
+/*
  * JavaFX App
- * 
- * 
- * 
  */
 public class AppServer extends Application implements Runnable{
 
@@ -37,10 +32,14 @@ public class AppServer extends Application implements Runnable{
 	private static Socket clientSocket;
 	public static List<ServerManagment> listOfClients = new ArrayList<ServerManagment>();
 	private static TextArea textArea;
-	private static Connection connection;
-	private static Thread fxThread;//Поток который будет отвечать за визуал 
+	private static Button btn1 = new Button("Старт Сервера");
+	private static Button btn2 = new Button("Изменить цвет");
+	private static Button btn3 = new Button("Остановить Сервер");
 	private static Thread tAppServer;//Поток который будет отвечать за сервер
-	public static volatile int count = 0;
+	private static DataBaseManagement dataBaseManagement;
+	public static volatile int amountClients = 0;
+	
+	public static boolean checkWorking=true;//Отвечает за отключение сервера
 	
     public static void main(String[] args) {
 //    	AppServer appServer = new AppServer();
@@ -54,18 +53,18 @@ public class AppServer extends Application implements Runnable{
     
   @Override
     public void start(Stage stage) {
-	  
-	  fxThread = Thread.currentThread();
-	  
-	  Button btn1 = new Button("Старт Сервера");
+
 	  btn1.setPrefWidth(200);
 	  btn1.setPrefHeight(100);
-	  Button btn2 = new Button("Изменить цвет");
+	  btn1.setStyle("-fx-background-color: #008000; -fx-border-width: 5px; -fx-border-color:#006400");
+	  
 	  btn2.setPrefWidth(200);
 	  btn2.setPrefHeight(100);
-	  Button btn3 = new Button("Остановить Сервер");
+	  
 	  btn3.setPrefWidth(200);
 	  btn3.setPrefHeight(100);
+	  btn3.setStyle("-fx-background-color: #B22222; -fx-border-width: 5px; -fx-border-color:#8B0000");
+	  btn3.setDisable(true);
 
 	  //TilePane tpBTNS = new TilePane(Orientation.VERTICAL,btn1,btn2,btn3);
 	  //tpBTNS.setVgap(20);	  
@@ -99,30 +98,33 @@ public class AppServer extends Application implements Runnable{
 	   * Запуск сервера
 	   */
 	  btn1.setOnAction(e -> {
-		  AppServer appServer = new AppServer();
-		  tAppServer = new Thread(appServer);
+		  checkWorking=true;
+		  tAppServer = new Thread(new AppServer());
 		  tAppServer.start();
-		  try{
-			  connection = DriverManager.getConnection("jdbc:mysql://localhost/clients_chat2","root","root");
-			  DataBaseManagement dataBaseManagement = new DataBaseManagement(connection);
-			  textArea.appendText("Система хранения данных: База данных \n");
-		  }catch( SQLException exc){
-			  textArea.appendText("Система хранения данных: Список \n");
-		  }
 		  
 	  });
-	  
+	 
 	  btn2.setOnAction(e -> {
 
 		  
 	  });
 	  //Нажатие на эту кнопку останавливает сервер
 	  btn3.setOnAction(e -> {
-		  tAppServer.interrupt();
+		  //tAppServer.interrupt();
+		  checkWorking = false;
+		  
 		  ClientManagement clientManagement = new ClientManagement(true);
 		  Thread t = new Thread(clientManagement);
-		  t.start();	  
-		  
+		  t.start();
+		  //Удаляет таблицу в БД
+		  if(ConnectionToDataBase.CONNECT.isConnectToDataBase()) {
+			try {
+				dataBaseManagement.deleteTable();
+			} catch (SQLException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+		  }
 	  });
 	  
 	  stage.setScene(scene);
@@ -135,6 +137,14 @@ public class AppServer extends Application implements Runnable{
 	  stage.show();
 	  
 	  stage.setOnCloseRequest(e ->{//Что произойдет если нажать на крестик
+		  if(ConnectionToDataBase.CONNECT.isConnectToDataBase()) {//Проверяет есть ли подключение
+			try {
+				dataBaseManagement.deleteTable();
+			} catch (SQLException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
+		  }
 		  System.exit(0);//Этот метод завершает программу
 	  });
 	  
@@ -147,36 +157,57 @@ public class AppServer extends Application implements Runnable{
   
 	public void startServer() {
 		try {
+			//Я перенес подключениек БД из кнопки сюда(в кнопке закоментирвоал) теперь ошибка идет реже....может дело в потоках и что что то не успевает закрыться/открыться
+			if (ConnectionToDataBase.CONNECT.isConnectToDataBase()) {
+				dataBaseManagement = new DataBaseManagement();
+				dataBaseManagement.createTable();
+
+				textArea.appendText("Система хранения данных: База данных \n");
+			} else {
+				textArea.appendText("Система хранения данных: Список \n");
+			}
+			//Меняем цвет кнопкам
+			btn1.setStyle("-fx-background-color: #B22222; -fx-border-width: 5px; -fx-border-color:#8B0000");
+			btn1.setDisable(true);
+			btn3.setStyle("-fx-background-color: #008000; -fx-border-width: 5px; -fx-border-color:#006400");
+			btn3.setDisable(false);
+			////////////////////////
+			
 			serverSocket = new ServerSocket(PORT);// Встановили порт
 			textArea.appendText("Сервер запущений\n");
 			textArea.appendText("Чекаю підключення\n");
-			while (!(tAppServer.isInterrupted())) {//Проверяет на прерывание потока сервера
+			while (checkWorking) {//Проверяет на прерывание потока сервера !(tAppServer.isInterrupted())
 				clientSocket = serverSocket.accept();// Чекає підключення
-				if(!(tAppServer.isInterrupted())) {//Проверяет на прерывание потока сервера
+				if(checkWorking) {//Проверяет на прерывание потока сервера
 					try {
 						listOfClients.add(new ServerManagment(clientSocket));//Добавляет в колекцию, временная замена БД
-						textArea.appendText("Підключень " + ++count + "\n");//Вывод на экран сервера количество подключенных клиентов
+						textArea.appendText("Підключень: " + ++amountClients + "\n");//Вывод на экран сервера количество подключенных клиентов
 						listOfClients.forEach(x -> textArea.appendText(x.getName()+ "\n"));//Вывод на экран сервера всей колекции
+					
 					} catch (IOException e) {
 						clientSocket.close();
 					}
 				}	
 
 			}
-			textArea.appendText("Сервер закрыт\n");//Отправляет на экран сервера сообщение о его закрытии
-			//Отправляет всем клиентам "Exit" что заставляет их остановить диалог
-			listOfClients.forEach(x -> {
-				try {
-					x.send("Exit");
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			});
-			listOfClients.forEach(x -> listOfClients.remove(x));//чистит колекцию, заменить на БД потом
 			
 			
-		} catch (IOException e) {
+			ServerManagment.sendToAll("Сервер закончил работу");//Отправляет всем клиентам "Exit" что заставляет их остановить диалог		
+			while(listOfClients.size()>0) {//Проверяем закрыли ли мы всех клиентов, если нет, тогда ждем 100 милисикунд, если снова не полностью очистили клиентов, еще ждем
+				Thread.sleep(100);
+			}
+			
+			//Меняем цвет кнопкам
+			btn3.setStyle("-fx-background-color: #B22222; -fx-border-width: 5px; -fx-border-color:#8B0000");
+			btn3.setDisable(true);
+			btn1.setStyle("-fx-background-color: #008000; -fx-border-width: 5px; -fx-border-color:#006400");
+			btn1.setDisable(false);
+
+			textArea.appendText("Сервер закрыт\n");//Отправляет на экран сервера сообщение о его закрытии	
+			serverSocket.close();
+			
+			
+		} catch (IOException | InterruptedException | SQLException e) {
 			e.printStackTrace();
 		} finally {
 			try {
@@ -210,12 +241,11 @@ public class AppServer extends Application implements Runnable{
 					request = reader.readLine();
 					//Если приходящее сообщение это "Вихід" и "Exit", тогда сервер отправляет сообщение обратно и вычеркивая клиента из списка, закрывает соединение
 					if (request.equals("Вихід") || request.equals("Exit")) {
-						send(request);
-						textArea.appendText("Закрываемо діалог з клієнтом\n");
+						send("Вы вышли");
 						listOfClients.remove(this);
-						textArea.appendText("Підключень " + --count +"\n");
-						System.out.println(listOfClients);
-						stopServer();
+						textArea.appendText("Підключень: " + --amountClients +" \n");
+						//System.out.println(listOfClients);
+						stopConnectionToClient();
 						break;
 					}
 					/*
@@ -225,35 +255,34 @@ public class AppServer extends Application implements Runnable{
 					sendToAll(request);
 					
 				} catch (IOException e) {
-					stopServer();
+					stopConnectionToClient();
 					e.printStackTrace();
 				}
 			}
 
 		}
-
-		
 		//Отправляет сообщение всем
-		public void sendToAll(String request)  {
-			listOfClients.forEach(x -> {
-				try {
-					x.send(request);
-				} catch (IOException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			});
+		public static void sendToAll(String request)  {
+			if(listOfClients.size() > 0){
+				listOfClients.forEach(x -> {
+					try {
+						x.send(request);
+					} catch (IOException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+				});
+			}
 		}
-		
-		
+
 		//Отправляет сообщение
 		public void send(String request) throws IOException {	
 			writer.write(request + "\n");
 			writer.flush();
 		}
-
+		
 		//Остановка сервера
-		private void stopServer() {
+		private void stopConnectionToClient() {
 			try {
 				reader.close();
 				writer.close();
@@ -264,8 +293,6 @@ public class AppServer extends Application implements Runnable{
 			}
 		}
 	}
-
-  
 }
 
 
