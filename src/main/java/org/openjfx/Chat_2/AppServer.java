@@ -8,7 +8,7 @@ import java.io.OutputStreamWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.sql.SQLException;
-import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import javafx.application.Application;
@@ -21,6 +21,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Ellipse;
 import javafx.stage.Stage;
 /*
  * JavaFX App
@@ -30,58 +31,78 @@ public class AppServer extends Application implements Runnable{
 	public static int PORT = 8000;
 	private static ServerSocket serverSocket;
 	private static Socket clientSocket;
-	public static List<ServerManagment> listOfClients = new ArrayList<ServerManagment>();
+	public static List<ServerManagment> listOfClients = new LinkedList<ServerManagment>();
 	private static TextArea textArea;
 	private static Button btn1 = new Button("Старт Сервера");
-	private static Button btn2 = new Button("Изменить цвет");
+	private static Button btn2 = new Button("Получить список клиентов БД");
 	private static Button btn3 = new Button("Остановить Сервер");
+	private static Ellipse ellipseDataBase;
+	private static Ellipse ellipseServer;
 	private static Thread tAppServer;//Поток который будет отвечать за сервер
-	private static DataBaseManagement dataBaseManagement;
-	public static volatile int amountClients = 0;
+	private static DataBaseManagement dataBaseManagement;//Обьект класса управления БД
+	public static volatile int amountClients = 0;//Число подключенных к серверу клиентов 
+	public static final String ACTIVE_BUTTON_STYLE="-fx-background-color: #008000; -fx-border-width: 5px; -fx-border-color:#006400; -fx-text-fill: #FFFFFF";//Стиль для активной кнопки
+	public static final String INACTIVE_BUTTON_STYLE="-fx-background-color: #B22222; -fx-border-width: 5px; -fx-border-color:#8B0000; -fx-text-fill: #FFFFFF";//Стиль для неактивной кнопки
 	
 	public static boolean checkWorking=true;//Отвечает за отключение сервера
 	
     public static void main(String[] args) {
-//    	AppServer appServer = new AppServer();
-//		Thread tAppServer = new Thread(appServer);
-//    	tAppServer.start();
-//		appServer.startServer();
-
     	launch();
     }
-    
-    
+
   @Override
     public void start(Stage stage) {
 
 	  btn1.setPrefWidth(200);
 	  btn1.setPrefHeight(100);
-	  btn1.setStyle("-fx-background-color: #008000; -fx-border-width: 5px; -fx-border-color:#006400");
+	  btn1.setStyle(ACTIVE_BUTTON_STYLE);
 	  
 	  btn2.setPrefWidth(200);
 	  btn2.setPrefHeight(100);
+	  btn2.setDisable(true);
+	  btn2.setStyle(INACTIVE_BUTTON_STYLE);
 	  
 	  btn3.setPrefWidth(200);
 	  btn3.setPrefHeight(100);
-	  btn3.setStyle("-fx-background-color: #B22222; -fx-border-width: 5px; -fx-border-color:#8B0000");
+	  btn3.setStyle(INACTIVE_BUTTON_STYLE);
 	  btn3.setDisable(true);
-
-	  //TilePane tpBTNS = new TilePane(Orientation.VERTICAL,btn1,btn2,btn3);
-	  //tpBTNS.setVgap(20);	  
+ 
 	  FlowPane fpBTNS = new FlowPane(btn1,btn2,btn3);//FlowPane с кнопочками
 	  fpBTNS.setOrientation(Orientation.VERTICAL);//Устанавливает вертикальную ориентацию
 	  fpBTNS.setVgap(30);//Устанавливает вертикальные отступы между элементами
-	  FlowPane.setMargin(fpBTNS, new Insets(50,0,0,4));//Отступ
+	  FlowPane.setMargin(fpBTNS, new Insets(50,0,0,-40));//Отступ
 	  
-	  Label label = new Label("Сервер");
-	  label.setMaxSize(50, 50);//Максимальный развер label первое значение ширина, второе значение высота
+	  Label labelServer = new Label("Сервер:");
+	  labelServer.setMaxSize(50, 50);//Максимальный развер label первое значение ширина, второе значение высота
+	  
+	  ellipseServer = new Ellipse();
+	  ellipseServer.setCenterX(2);
+	  ellipseServer.setCenterY(3);
+	  ellipseServer.setRadiusX(4);
+	  ellipseServer.setRadiusY(5);
+	  ellipseServer.setFill(Color.RED);
+	  
+	  Label labelDataBase = new Label("  DataBase:");
+	  labelDataBase.setMaxSize(60, 50);//Максимальный развер label первое значение ширина, второе значение высота
+	  
+	  ellipseDataBase = new Ellipse();
+	  ellipseDataBase.setCenterX(2);
+	  ellipseDataBase.setCenterY(3);
+	  ellipseDataBase.setRadiusX(4);
+	  ellipseDataBase.setRadiusY(5);
+	  ellipseDataBase.setFill(Color.RED);
+	 
+	  FlowPane fpLabels_Eliipses = new FlowPane(labelServer,ellipseServer, labelDataBase, ellipseDataBase);
+	  fpLabels_Eliipses.setOrientation(Orientation.HORIZONTAL);
+	  fpLabels_Eliipses.setMaxWidth(120);
+	  
 	  textArea = new TextArea();
 	  textArea.setPrefWidth(300);//Устанавливает предпочитаемую ширину
 	  textArea.setPrefHeight(420);//Устанавливает предпочитаемую висоту
 	  textArea.setEditable(false);//Устанавливает можно ли писать в поле или нет
 	  textArea.setWrapText(true);//Текст переноситься на новую строчку, после того как доходит края, а не идет и идет и идет...	  
 	  
-	  FlowPane fpLabel_TextArea = new FlowPane(label, textArea);
+	  FlowPane fpLabel_TextArea = new FlowPane(fpLabels_Eliipses, textArea);
 	  fpLabel_TextArea.setOrientation(Orientation.VERTICAL);
 	  FlowPane.setMargin(fpLabel_TextArea, new Insets(1,0,0,4));//Отступ
 	  
@@ -92,8 +113,6 @@ public class AppServer extends Application implements Runnable{
 	  flowPane.setAlignment(Pos.TOP_LEFT);
 	  
 	  Scene scene = new Scene(flowPane);
-	  scene.setFill(Color.AQUA);
-	  
 	  /*
 	   * Запуск сервера
 	   */
@@ -101,12 +120,17 @@ public class AppServer extends Application implements Runnable{
 		  checkWorking=true;
 		  tAppServer = new Thread(new AppServer());
 		  tAppServer.start();
-		  
 	  });
 	 
 	  btn2.setOnAction(e -> {
-
-		  
+//		  if (ConnectionToDataBase.CONNECT.isConnectToDataBase() && !(dataBaseManagement == null)) {
+			  try {
+				  textArea.appendText(dataBaseManagement.getAllClients());
+			  } catch (SQLException e1) {
+				  // TODO Auto-generated catch block
+				  e1.printStackTrace();
+			  }
+//		  }
 	  });
 	  //Нажатие на эту кнопку останавливает сервер
 	  btn3.setOnAction(e -> {
@@ -137,9 +161,10 @@ public class AppServer extends Application implements Runnable{
 	  stage.show();
 	  
 	  stage.setOnCloseRequest(e ->{//Что произойдет если нажать на крестик
-		  if(ConnectionToDataBase.CONNECT.isConnectToDataBase()) {//Проверяет есть ли подключение
+		  if(ConnectionToDataBase.CONNECT.isConnectToDataBase() && !(dataBaseManagement==null)) {//Проверяет есть ли подключение и null ли dataBaseManagement
 			try {
 				dataBaseManagement.deleteTable();
+				dataBaseManagement.stopConnect();
 			} catch (SQLException e1) {
 				// TODO Auto-generated catch block
 				e1.printStackTrace();
@@ -147,7 +172,6 @@ public class AppServer extends Application implements Runnable{
 		  }
 		  System.exit(0);//Этот метод завершает программу
 	  });
-	  
     }
   
 	@Override
@@ -157,25 +181,31 @@ public class AppServer extends Application implements Runnable{
   
 	public void startServer() {
 		try {
+			//Меняем цвет кнопкам
+			btn1.setDisable(true);//Выключает кнопку
+			btn1.setStyle(INACTIVE_BUTTON_STYLE);
+			btn3.setDisable(false);//Включает кнопку
+			btn3.setStyle(ACTIVE_BUTTON_STYLE);
+			////////////////////////
+			//Устанавливаем соединение
+			serverSocket = new ServerSocket(PORT);//Встановили порт
+			textArea.appendText("Сервер запущений\n");
+			ellipseServer.setFill(Color.GREEN);
+			
 			//Я перенес подключениек БД из кнопки сюда(в кнопке закоментирвоал) теперь ошибка идет реже....может дело в потоках и что что то не успевает закрыться/открыться
 			if (ConnectionToDataBase.CONNECT.isConnectToDataBase()) {
 				dataBaseManagement = new DataBaseManagement();
 				dataBaseManagement.createTable();
-
-				textArea.appendText("Система хранения данных: База данных \n");
+				textArea.appendText("База данних - включена \n");
+				ellipseDataBase.setFill(Color.GREEN);
+				btn2.setDisable(false);//Включает кнопку
+				btn2.setStyle(ACTIVE_BUTTON_STYLE);
 			} else {
-				textArea.appendText("Система хранения данных: Список \n");
+				textArea.appendText("База данних - вимкнена \n");
 			}
-			//Меняем цвет кнопкам
-			btn1.setStyle("-fx-background-color: #B22222; -fx-border-width: 5px; -fx-border-color:#8B0000");
-			btn1.setDisable(true);
-			btn3.setStyle("-fx-background-color: #008000; -fx-border-width: 5px; -fx-border-color:#006400");
-			btn3.setDisable(false);
-			////////////////////////
 			
-			serverSocket = new ServerSocket(PORT);// Встановили порт
-			textArea.appendText("Сервер запущений\n");
 			textArea.appendText("Чекаю підключення\n");
+			
 			while (checkWorking) {//Проверяет на прерывание потока сервера !(tAppServer.isInterrupted())
 				clientSocket = serverSocket.accept();// Чекає підключення
 				if(checkWorking) {//Проверяет на прерывание потока сервера
@@ -188,24 +218,25 @@ public class AppServer extends Application implements Runnable{
 						clientSocket.close();
 					}
 				}	
-
 			}
-			
 			
 			ServerManagment.sendToAll("Сервер закончил работу");//Отправляет всем клиентам "Exit" что заставляет их остановить диалог		
 			while(listOfClients.size()>0) {//Проверяем закрыли ли мы всех клиентов, если нет, тогда ждем 100 милисикунд, если снова не полностью очистили клиентов, еще ждем
-				Thread.sleep(100);
+				Thread.sleep(500);
 			}
-			
+			System.out.println(listOfClients.size());
 			//Меняем цвет кнопкам
-			btn3.setStyle("-fx-background-color: #B22222; -fx-border-width: 5px; -fx-border-color:#8B0000");
-			btn3.setDisable(true);
-			btn1.setStyle("-fx-background-color: #008000; -fx-border-width: 5px; -fx-border-color:#006400");
-			btn1.setDisable(false);
+			btn3.setStyle(INACTIVE_BUTTON_STYLE);
+			btn3.setDisable(true);//Выключает кнопку
+			btn2.setStyle(INACTIVE_BUTTON_STYLE);
+			btn2.setDisable(true);//Выключает кнопку
+			btn1.setStyle(ACTIVE_BUTTON_STYLE);
+			btn1.setDisable(false);//Включает кнопку
 
 			textArea.appendText("Сервер закрыт\n");//Отправляет на экран сервера сообщение о его закрытии	
+			ellipseServer.setFill(Color.RED);//Перключает цвет обозначения работы сервера 
+			ellipseDataBase.setFill(Color.RED);//Перключает цвет обозначения работы Базы Данных
 			serverSocket.close();
-			
 			
 		} catch (IOException | InterruptedException | SQLException e) {
 			e.printStackTrace();
@@ -294,6 +325,3 @@ public class AppServer extends Application implements Runnable{
 		}
 	}
 }
-
-
-

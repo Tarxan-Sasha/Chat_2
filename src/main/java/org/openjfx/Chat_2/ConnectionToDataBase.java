@@ -12,7 +12,7 @@ public enum ConnectionToDataBase {
 	
 	private ConnectionToDataBase() {
 		try {
-			connection = DriverManager.getConnection("jdbc:mysql://localhost/clients_chat2","root","root");
+			connection = DriverManager.getConnection("jdbc:mysql://localhost/clients_chat22","root","root");
 		} catch (SQLException e) {
 			// TODO Auto-generated catch block
 			
