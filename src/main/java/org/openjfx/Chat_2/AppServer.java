@@ -250,7 +250,6 @@ public class AppServer extends Application implements Runnable{
 		}
 	}
 	
-	
 	private static class ServerManagment extends Thread {
 
 		private Socket socket;
@@ -290,7 +289,6 @@ public class AppServer extends Application implements Runnable{
 					e.printStackTrace();
 				}
 			}
-
 		}
 		//Отправляет сообщение всем
 		public static void sendToAll(String request)  {
